@@ -14,6 +14,8 @@ param
    [Parameter(Mandatory=$true)]
    $OS,
    [Parameter(Mandatory=$true)]
+   [SecureString] $Password,
+   [Parameter(Mandatory=$true)]
    $VMSKU    
  )
 #Static Variable
@@ -22,21 +24,22 @@ $pubIP = 'VMPublicIP'
 $PIPsku = 'Basic'
 $PIPalloc = 'dynamic'
 $VMname = 'test'
+$Username = "vmadminuser"
 #Resource Group  Creation
 New-AZResourceGroup -Name $Resourcegroup -Location $location
 #VNET Creation
 # Create a subnet configuration
 $SubnetConfig = New-AzVirtualNetworkSubnetConfig -Name $subnetName -AddressPrefix $subnetAddress
 # Create a virtual network
-$VNet = New-AzVirtualNetwork -ResourceGroupName $ResourceGroup -Location $Location -Name $VNETNAME -AddressPrefix $VNETAddress -Subnet $subnetConfig
+$VNet = New-AzVirtualNetwork -ResourceGroupName $ResourceGroup -Location $Location -Name $VNETNAME -AddressPrefix $VNETAddress -Subnet $subnetConfig 
 # Get the subnet object for use in a later step.
 $Subnet = Get-AzVirtualNetworkSubnetConfig -Name $SubnetConfig.Name -VirtualNetwork $VNet
 #Public IP address Creation
-$vmpip=New-AzPublicIpAddress -ResourceGroupName $Resourcegroup -Name $pubIP -Location $location -AllocationMethod $PIPalloc -SKU $PIPsku 
+$vmpip=New-AzPublicIpAddress -ResourceGroupName $Resourcegroup -Name $pubIP -Location $location -AllocationMethod $PIPalloc -SKU $PIPsku -Zone {}
 #NSG Rule and Config
 $#NSGRule = New-AzNetworkSecurityRuleConfig -Name MyNsgRuleRDP  -Protocol Tcp  -Direction Inbound  -Priority 1000  -SourceAddressPrefix *  -SourcePortRange *  -DestinationAddressPrefix *  -DestinationPortRange 3389 -Access Allow
 #Credential
-$cred = Get-Credential
+$cred = $Credential = New-Object -TypeName PSCredential -ArgumentList ($Username, $Password)
 switch ($os){
     {$_ -eq "windows" } {
         #NSG Rule and Config
