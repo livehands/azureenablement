@@ -4,7 +4,17 @@ using namespace System.Net
 param($Request, $TriggerMetadata)
 
 # Write to the Azure Functions log stream.
-Write-Host "PowerShell HTTP trigger function processed a request."
+Write-Host "Getting Azure Locations for Subscription..."
+
+$subscriptionId = $env:subscriptionId
+$tenantId = $env:tenantId
+
+Write-Host "subId: " + $subscriptionId
+Write-Host "TenantId: " + $tenantId
+
+###################################
+#Set Default Security
+Set-AzContext -Subscription "$subscriptionId"
 
 $locations = Get-AzureRmLocation
 

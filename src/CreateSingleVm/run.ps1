@@ -4,16 +4,11 @@ using namespace System.Net
 param($Request, $TriggerMetadata)
 
 # Write to the Azure Functions log stream.
-Write-Host "PowerShell HTTP trigger function processed a request."
+Write-Host "Creating Single VM..."
 
-# Interact with query parameters or the body of the request.
-if (-not $name) {
-    $name = $Request.Body.Name
-}
+$body = $Request.Body
 
-$params = $request.Body
-
-$tags = $body.Tags
+$tags = $body.tags
 $resourceGroup = $body.resourceGroup
 $vnetName = $body.vnetName
 $location = $body.location
@@ -22,26 +17,40 @@ $subnetAddress = $body.subnetAddress
 $vmSku = $body.vmSku
 $vmName = $body.vmName
 
+#Static Variable
+$SubnetName = 'MGMTSubnet'
+$pubIP = 'VMPublicIP'
+$PIPsku = 'Basic'
+$PIPalloc = 'dynamic'
+
 $subnetName = $body.subnetName
 if(-not $subnetName) {
     $subnetName = "MGMTSubnet"
 }
 
 #Resource Group  Creation
+Write-Host "Creating RG..."
 New-AZResourceGroup -Name $resourcegroup -Location $location
+
 #VNET Creation
+Write-Host "Creating VNet..."
 # Create a subnet configuration
 $SubnetConfig = New-AzVirtualNetworkSubnetConfig -Name $subnetName -AddressPrefix $subnetAddress
 # Create a virtual network
 $VNet = New-AzVirtualNetwork -ResourceGroupName $resourceGroup -Location $location -Name $vnetName -AddressPrefix $vnetAddress -Subnet $subnetConfig
 # Get the subnet object for use in a later step.
 $Subnet = Get-AzVirtualNetworkSubnetConfig -Name $SubnetConfig.Name -VirtualNetwork $VNet
+
 #Public IP address Creation
 $vmpip=New-AzPublicIpAddress -ResourceGroupName $resourcegroup -Name $pubIP -Location $location -AllocationMethod $PIPalloc -SKU $PIPsku 
+
+Write-Host "Creating NSG..."
 #NSG Rule and Config
 $NSGRule = New-AzNetworkSecurityRuleConfig -Name MyNsgRuleRDP  -Protocol Tcp  -Direction Inbound  -Priority 1000  -SourceAddressPrefix *  -SourcePortRange *  -DestinationAddressPrefix *  -DestinationPortRange 3389 -Access Allow
 # Create a network security group
 $NSG = New-AzNetworkSecurityGroup  -ResourceGroupName $resourcegroup  -Location $location  -Name VMtworkSecurityGroup  -SecurityRules $NSGRule
+
+Write-Host "Creating VM..."
 #VM NIC Creation
 $VMNICname = $vmName + "-NIC"
 $VMIpConfig     = New-AzNetworkInterfaceIpConfig -Name $VMNICname -Subnet $Subnet -PublicIpAddress $vmpip 
