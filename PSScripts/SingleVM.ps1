@@ -42,7 +42,7 @@ $Subnet = Get-AzVirtualNetworkSubnetConfig -Name $SubnetConfig.Name -VirtualNetw
 write-host "Creating PIP"
 $vmpip=New-AzPublicIpAddress -ResourceGroupName $Resourcegroup -Name $pubIP -Location $location -AllocationMethod $PIPalloc -SKU $PIPsku 
 #Creating Storage account for boot diagnostics
-$storageAccount = New-AzStorageAccount -ResourceGroupName $Resourcegroup -Name $storageaccountname -SkuName Standard_LRS   -Location $location 
+New-AzStorageAccount -ResourceGroupName $Resourcegroup -Name $storageaccountname -SkuName Standard_LRS   -Location $location 
 #disk profile creation 
 #$diskConfig = New-AzDiskConfig -Location $location -CreateOption Empty -DiskSizeGB 128
 #$OSdisk = New-AzDisk -ResourceGroupName $Resourcegroup -DiskName "OSDisk" -Disk $diskConfig
