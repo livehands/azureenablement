@@ -4,7 +4,7 @@ using namespace System.Net
 param($Request, $TriggerMetadata)
 
 # Write to the Azure Functions log stream.
-Write-Host "Creating Single VM..."
+Write-Host "Starting Create Single VM..."
 
 $body = $Request.Body
 
@@ -16,6 +16,9 @@ $vnetAddress = $body.vnetAddress
 $subnetAddress = $body.subnetAddress
 $vmSku = $body.vmSku
 $vmName = $body.vmName
+$Username = $body.Username
+$Password = $body.Password
+$os=$body.os
 
 #Static Variable
 $SubnetName = 'MGMTSubnet'
@@ -30,42 +33,53 @@ if(-not $subnetName) {
 
 #Resource Group  Creation
 Write-Host "Creating RG..."
-New-AZResourceGroup -Name $resourcegroup -Location $location
+#Resource Group  Creation
+New-AZResourceGroup -Name $Resourcegroup -Location $location 
 
-#VNET Creation
 Write-Host "Creating VNet..."
+#VNET Creation
 # Create a subnet configuration
 $SubnetConfig = New-AzVirtualNetworkSubnetConfig -Name $subnetName -AddressPrefix $subnetAddress
 # Create a virtual network
-$VNet = New-AzVirtualNetwork -ResourceGroupName $resourceGroup -Location $location -Name $vnetName -AddressPrefix $vnetAddress -Subnet $subnetConfig
+$VNet = New-AzVirtualNetwork -ResourceGroupName $ResourceGroup -Location $Location -Name $VNETNAME -AddressPrefix $VNETAddress -Subnet $subnetConfig 
 # Get the subnet object for use in a later step.
 $Subnet = Get-AzVirtualNetworkSubnetConfig -Name $SubnetConfig.Name -VirtualNetwork $VNet
-
 #Public IP address Creation
-$vmpip=New-AzPublicIpAddress -ResourceGroupName $resourcegroup -Name $pubIP -Location $location -AllocationMethod $PIPalloc -SKU $PIPsku 
+$vmpip=New-AzPublicIpAddress -ResourceGroupName $Resourcegroup -Name $pubIP -Location $location -AllocationMethod $PIPalloc -SKU $PIPsku 
 
-Write-Host "Creating NSG..."
-#NSG Rule and Config
-$NSGRule = New-AzNetworkSecurityRuleConfig -Name MyNsgRuleRDP  -Protocol Tcp  -Direction Inbound  -Priority 1000  -SourceAddressPrefix *  -SourcePortRange *  -DestinationAddressPrefix *  -DestinationPortRange 3389 -Access Allow
-# Create a network security group
-$NSG = New-AzNetworkSecurityGroup  -ResourceGroupName $resourcegroup  -Location $location  -Name VMtworkSecurityGroup  -SecurityRules $NSGRule
+#Credential & Config
+Write-Host "Configure VM & NSG..."
+Write-Host "The OS is: " + $os
+#Convert to SecureString
+$secStringPassword = ConvertTo-SecureString $Password -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential ($userName, $secStringPassword)
+switch ($os){
+    {$_ -eq "windows" } {
+        #NSG Rule and Config
+        $NSGRule = New-AzNetworkSecurityRuleConfig -Name MyNsgRuleRDP  -Protocol Tcp  -Direction Inbound  -Priority 1000  -SourceAddressPrefix *  -SourcePortRange *  -DestinationAddressPrefix *  -DestinationPortRange 3389 -Access Allow;
+         # Create a network security group
+        $NSG = New-AzNetworkSecurityGroup  -ResourceGroupName $Resourcegroup  -Location $Location  -Name VMtworkSecurityGroup  -SecurityRules $NSGRule;
+        $VMNICname = $vmname + "-NIC"
+        $VMIpConfig = New-AzNetworkInterfaceIpConfig -Name $VMNICname -Subnet $Subnet -PublicIpAddress $vmpip 
+        $nic = New-AzNetworkInterface -Name $VMNICname -ResourceGroupName $Resourcegroup -Location $Location -NetworkSecurityGroupId $NSG.Id -IpConfiguration $VMIPConfig
+        $VmConfig = New-AzVMConfig  -VMName $VMname -VMSize $VMSKU | Set-AzVMOperatingSystem -Windows  -ComputerName $Vmname -Credential $cred |  Set-AzVMSourceImage  -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2016-Datacenter  -Version latest |  Add-AzVMNetworkInterface -Id $Nic.ID;
+        break}
+    {$_ -eq "Ubuntu"} {
+        $NSGRule = New-AzNetworkSecurityRuleConfig -Name MyNsgRuleRDP  -Protocol Tcp  -Direction Inbound  -Priority 1000  -SourceAddressPrefix *  -SourcePortRange *  -DestinationAddressPrefix *  -DestinationPortRange 22 -Access Allow;
+         # Create a network security group
+        $NSG = New-AzNetworkSecurityGroup  -ResourceGroupName $Resourcegroup  -Location $Location  -Name VMtworkSecurityGroup  -SecurityRules $NSGRule;
+        $VMNICname = $vmname + "-NIC"
+        $VMIpConfig     = New-AzNetworkInterfaceIpConfig -Name $VMNICname -Subnet $Subnet -PublicIpAddress $vmpip 
+        $nic = New-AzNetworkInterface -Name $VMNICname -ResourceGroupName $Resourcegroup -Location $Location -NetworkSecurityGroupId $NSG.Id -IpConfiguration $VMIPConfig
+        $VmConfig = New-AzVMConfig  -VMName $VMname -VMSize $VMSKU | Set-AzVMOperatingSystem  -Linux  -ComputerName $Vmname -Credential $cred |  Set-AzVMSourceImage  -PublisherName Canonical -Offer WindowsServerUbuntuServer -Skus 14.04.2-LTS -Version latest |  Add-AzVMNetworkInterface -Id $Nic.ID;
+        break}
+    }
+    
 
-Write-Host "Creating VM..."
-#VM NIC Creation
-$VMNICname = $vmName + "-NIC"
-$VMIpConfig     = New-AzNetworkInterfaceIpConfig -Name $VMNICname -Subnet $Subnet -PublicIpAddress $vmpip 
-$nic = New-AzNetworkInterface -Name $VMNICname -ResourceGroupName $resourcegroup -Location $location -NetworkSecurityGroupId $NSG.Id -IpConfiguration $VMIPConfig
-<#Disk Creation 
-$diskConfig = New-AzDiskConfig -Location $location -CreateOption Empty -DiskSizeGB 128
-$dataDisk = New-AzDisk -ResourceGroupName $ResouceGroup -DiskName "OSDisk" -Disk $diskConfig#>
-#Credential
-$cred = Get-Credential
+
+Write-Host "Create VM"
 #VMconfig
-$VmConfig = New-AzVMConfig  -VMName $vmName -VMSize $VMSKU | Set-AzVMOperatingSystem -Windows  -ComputerName $vmName -Credential $cred |  Set-AzVMSourceImage  -PublisherName MicrosoftWindowsServer -Offer WindowsServer -Skus 2016-Datacenter  -Version latest |  Add-AzVMNetworkInterface -Id $Nic.ID|
-# Working on this - $vmConfig = Add-AzVMDataDisk -VM $VmConfig -Name "OSDISK" -CreateOption Attach -ManagedDiskId $dataDisk.Id -Lun 1
-#If ($VmOS -eq "windows")
-#{
- New-AZVm -ResourceGroupName $resourcegroup -Location $location -VM $vmConfig -verbose
+New-AZVm -ResourceGroupName $Resourcegroup -Location $location -VM $VmConfig -verbose
 
 # Associate values to output bindings by calling 'Push-OutputBinding'.
 Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
